@@ -1,0 +1,245 @@
+###    R/R-Studio 
+
+### After counting gene counts assigned to the genomic feature of H glaber and M. musculus references using featureCounts, the resulted matrix is further used to analyse differentially expressed genes in NB. four- and 20-years old NMR using DESeq2 tool on R platform.
+
+### here this script represents DESEq2 performance only for the reads mapped to h. glaber reference genome, 
+
+
+####	1. Firstly, required packages are instslled from  Bioconductor
+
+
+
+>if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+>BiocManager::install("pasilla")
+>BiocManager::install("DESeq2")
+>BiocManager::install("apeglm")
+>library("pasilla")
+>library("DESeq2")
+>library("apeglm")
+
+
+####	2. Importing data: Count matrix input
+
+### Import the data and adjust structure to prepare for DESeq2.
+
+### The function DESeqDataSetFromMatrix was used as we already have a matrix of read counts produced from featureCounts function in the Rsubread package. 
+
+## We used pasilla package to read in count data to exhibit  the use of DESeqDataSetFromMatrix. 
+## We called count matrix cts and the sample information table , coldata. 
+
+
+>pasCts <- "C:/Users/krishna/Desktop/project/featurecounts_9samples/countmatrix.Rmatrix.txt"      ## to import matrix: output of featureCounts
+>pasAnno <- "C:/Users/krishna/Desktop/project/featurecounts_9samples/featurecounts_test.csv"      ## to import sample info table excel file
+>cts <- as.matrix(read.csv(pasCts,sep="\t",row.names="Geneid"))                             ## assigned row names as "Geneid" and all the values are seperated by "tab"
+>coldata <- read.csv(pasAnno, row.names=1)                                                        ### sample info table is assigned as coldata
+
+
+>coldata <- coldata[,c("condition","tissue")]        ###"condition and tissues" were added as vectors as volumns in coldata
+>coldata$tissue <- factor(coldata$tissue)            ### assigned tissue and condition as factors
+>coldata$condition <- factor(coldata$condition)
+
+
+### It is important that the rows of the coldata and the columns of the matrix are in same order as DESeq2 will not make guesses as to which column of the count matrix belongs to which row of the coldata. Unnecessary parts can be chopped off using "sub" so the naming is consistent/stable.
+
+
+>all(rownames(coldata) %in% colnames(cts))           ### assgning the order of rows of coldata to the order of columns of cts 
+>all(rownames(coldata) == colnames(cts))              ### to check if the order is even
+
+>cts <- cts[, rownames(coldata)]                ### adding new columns "ordered columns (rownames(coldata))" to the cts 
+>all(rownames(coldata) == colnames(cts))        ### again to check the order of rows and columns of the modified cts is equal ### should give TRUE as output
+
+
+####	3. Constructing DESeqDataSet (dds) :
+
+
+### Create Deseq2 matrix object for data
+### With the count matrix, cts, and the sample information, coldata, we can construct a DESeqDataSet:
+
+>dds <- DESeqDataSetFromMatrix(countData = cts,
+                               colData = coldata,
+                               design = ~ condition)
+>dds   ### this will give you the structure of the dds including details column names and row names 
+
+##### Further we prefilter the data by keeping the rows with atleast 10 reads. Two reasons behind prefiltering: we reduce the memory size of the dds data object and we increase the speed of the transformation and testing functions within DESeq2.
+
+>keep <- rowSums(counts(dds)) >= 10
+>dds <- dds[keep,]
+
+####    It is important to tell DESeq2 functiion the levels of the factors (in this case it is condition), otherwise by default R will do comaprision based on alphabetical order.
+### Setting factors 
+
+>dds$condition <- factor(dds$condition, levels = c("NB", "four", "twenty"))
+
+
+####	4. Differential expression analysis:
+
+
+### Now the Data is ready to go for differential expression analysis. Result tables are generated using the function called "results" which extracts a results table with log2 fold changes, p values and adjusted p values.
+### running the differential expression analysis
+
+>dds <- DESeq(dds)
+>res <- results(dds)
+>res
+
+### to get the coefficients to build the result tables:
+
+> resultsNames(dds)  ## this gives me "Intercept"       "condition_four_vs_NB"   "condition_twenty_vs_NB"
+
+
+###	5. log fold change shrinkage for vlisualization and ranking
+
+
+#To shrink the LFC (log fold change) we passed the dds to lfcShrink function. "apelgm" method is used for effect size shrinkage.
+# We provide the dds object and the name or number of the coefficient we want to shrink.
+
+## FOR COEF= condition_four_vs_NB
+
+> resLFC_4vsNB <- lfcShrink(dds, coef=2, type="apeglm")
+> resLFC_4vsNB
+
+## FOR COEF= condition_twenty_vs_NB
+
+> resLFC_20vsNB <- lfcShrink(dds, coef=3, type="apeglm")
+> resLFC_20vsNB
+
+
+###	6.  pvalues and adjusted p-values
+
+
+##To order our results table by the smallest p value:
+
+resOrdered <- res[order(res$pvalue),]
+> resOrdered
+> summary(resOrdered)  ### to summarize some basic tallies using the "summary" function
+
+##### to know the number of adjusted p-values less than 0.1
+sum(res$padj < 0.1, na.rm=TRUE)
+
+### the results which pass an adjusted p value threshold
+## can be accomplished with the subset function
+
+>resSig0.1 <- subset(resOrdered, padj < 0.1)
+>resSig0.1
+
+>resSig0.05 <- subset(resOrdered, padj <0.05)
+>resSig0.05
+
+
+
+###	7. Exploring and exporting results:
+
+
+
+>write.csv(as.data.frame(resSig0.1),
+           file="padj_0.1.csv")
+
+
+>write.csv(as.data.frame(resSig0.05),
+           file="padj_0.05.csv")
+ 
+
+>write.csv(as.data.frame(resOrdered),
+           file="resOrdered.csv")
+
+
+## A. MA-plot:
+## In DESeq2, the function MA plot was used to plot the log2 fold change given to a variable over the mean of normalized counts for all samples in dds. 
+## Points will be coloured red if the adj pvalue is less than 0.1. The points falling out of the window are plotted as open triangles pointing either upwards or down.
+
+## IMAGE 1: log fold change  vs mean of normalized counts of all samples in dds.
+
+>plotMA(res, ylim=c(-2,2))
+
+## Image 2 and 3: Shrunken log fold change (in twenty and NB years old NMR) which remove the noise associated with log2 fold changes from low count genes vs mean of normalized counts
+
+>plotMA(resLFC_20vsNB, ylim=c(-2,2))   ### twenty vs NB
+>plotMA(resLFC_NBvs4, ylim=c(-2,2))   ### four vs NB
+
+## B. Plot counts:
+## To examine the counts of the reads for a single gene across the gene can also be done using Plot counts. Plotcounts normalizes counts by sequencing depths and add a ## of 1/2 to allow for log scale ploting.
+## The counts are grouped by the variables in "intgroup" , where more than one variable can be specified.
+
+## Image 4:  plot count of the top 6 genes differentially expressed with lowest p value in all 9 samples
+
+### top 6 usingplotCounts
+>par(mfrow=c(2,3))
+>head(resSig0.05)
+
+
+>plotCounts(dds, gene="LOC101702367", intgroup="condition")
+>plotCounts(dds, gene="Kif20b", intgroup="condition")
+>plotCounts(dds, gene="Kif11", intgroup="condition")
+>plotCounts(dds, gene="Mki67", intgroup="condition")
+>plotCounts(dds, gene="Rrm2", intgroup="condition")
+>plotCounts(dds, gene="Mcm4", intgroup="condition")
+
+
+## C. Customized plotting using an ggplot
+## Here an arguement called "returnData" is used to only return a data.frame for plotting ggplot.
+
+>d <- plotCounts(dds, gene=which.min(res$padj), intgroup = "condition", returnData = TRUE)  ##plotting reads with minimun padj value
+>d
+
+>library("ggplot2")
+>ggplot(d, aes(x=condition, y=count))+
+   geom_point(position=position_jitter(w=0.1,h=0))+
+   scale_y_log10(breaks=c(25,100,400))
+
+### Single gene expression using ggplot where gene is with the mini padj value
+
+>install.packages("ggrepel")
+
+
+>library("ggrepel")
+>ggplot(d, aes(x = condition, y = count, color = condition)) +
+   geom_point(position=position_jitter(w = 0.1,h = 0)) +
+   geom_text_repel(aes(label = rownames(d))) +
+   theme_bw() +
+   ggtitle("LOC101702367") +
+   theme(plot.title = element_text(hjust = 0.5))
+
+## D. Volcano plot
+
+>par(mfrow=c(1,1))
+## make a basic volcano plot
+
+with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+
+## Add colored points: blue if padj<0.01, red if log2FC>1 and padj<0.05
+
+>with(subset(res, padj<0.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
+>with(subset(res, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+
+## E. PCA plot:
+## Principle component plot
+
+>vsdata <- vst(dds, blind = FALSE)
+
+>plotPCA(vsdata, intgroup=c("condition", "tissue"))
+
+###another way: plot using plotPCA
+
+
+>pcaData <- plotPCA(vsdata, intgroup=c("condition", "tissue"), returnData=TRUE)
+>percentVar <- round(100 * attr(pcaData, "percentVar"))
+>ggplot(pcaData, aes(PC1, PC2, color=condition, shape=tissue)) +
+   geom_point(size=3) +
+   xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+   ylab(paste0("PC2: ",percentVar[2],"% variance")) +
+   coord_fixed()
+
+
+### F. Heatmap
+
+
+>install.packages("pheatmap")
+
+
+>library("pheatmap")
+>select <- order(rowMeans(counts(dds,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+>df <- as.data.frame(colData(dds)[,c("condition","tissue")])
+>pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)

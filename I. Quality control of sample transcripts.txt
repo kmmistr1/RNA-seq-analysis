@@ -1,0 +1,47 @@
+### Analysis of differentially expressed genes(DEGs) in Naked Mole Rat (NMR) may link to healthy ageing, longevity, and other adaptations.
+
+### RNA seq Data for male Naked mole rat  were downloaded from GEO-NCBI with their accession number. They are generated through shot gun method on Illumina platform- Next Generation technique. Our samples are paired end reads.
+
+### Liver:
+SRR306394_1.fastq (forward), SRR306394_2.fastq (reverse), SRR306395.3_1.fastq (forward) SRR306395.3_2.fastq (reverse) : 4 years old,  ### SRR306396.3_1.fastq (forward) SRR306396.3_2.fastq (reverse) : 20 years old
+### kidney:
+SRR306397_1.fastq, SRR306397_2.fastq, SRR306398_1.fastq, SRR306398_2.fastq, SRR306399_1.fastq, SRR306399_2.fastq
+### Brain:
+SRR306400.fastq, SRR306401.fastq, SRR306402.fastq
+
+### Initial step is to check and improve data quality
+
+### I. QUALITY CONTROL: on Linux terminal
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306394_1.fastq
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306394_2.fastq
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306395.3_1.fastq
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306395.3_2.fastq
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306396.3_1.fastq
+fastqc /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306396.3_2.fastq
+#....likewise same code was used to check quality of all samples (liver, kidney and brain)
+
+### The above code produced the html and a zip file for all the 4 reads. HTML file was used to analyse the quality.
+
+### FASTX tool kit:
+### The below code was used to remove the low-quality reads based on the quality check outputs using “fastq_quality_filter” tool :
+
+fastq_quality_filter -v -Q 64 -q 20 -p 75 -i /home/krishnam/H_glaber_data/RNA_seq_raw/SRR306395.3_1.fastq -o SRR306394_1_filtered.fastq -Q33
+
+### likewise this code is run for all the 9 reads
+### this will remove the reads with scores below 20 and will keep reads until 75 bp.
+
+###Later, I trimmed the start bases where there is so much noise in the bases as per the “per base sequence content” in the quality check output. So based on it, I got rid of the first 7 bases in all 9 sample data and kept until 90 bases as it shown more bias using “fastx_trimmer”. To do this I ran the following code on all samples :
+
+fastx_trimmer -v -f 8 -l 90 -i SRR306394_1_filtered.fastq -o SRR306394_1_trim.fastq -Q33
+
+
+### Then, I ran “cutadapt” tool to remove the adapter contamination (if there is any) as shown in “overrepresented sequences” in html file of quality control output.
+
+cutadapt -m 20 -e 0.1 -a GATCGGAAGAGCACACGTCTGAACTCCAGTCACACTTGAATCTCGTATGC SRR306394_1_trim.fastq -o SRR306394_1_filtered_trim_cutadapt.fastq
+
+
+### After performing the filtering tools again on the filtered data, the “fatqc” tool is ran to check the quality of all the filtered data. 
+fastqc SRR306394_1_filtered_trim_cutadapt.fastq
+
+
+

@@ -1,0 +1,137 @@
+### After quality check next step is to map the filtered sample transcripts to its reference genome. Here  two reference transcripts were used for mapping: Mus musculus and Heterocephalus glaber
+
+### Many of the issues in the Quality report seem to have been resolved. Only the low quality kmer noise are left which should not affect the mapping stage as they should not map to the reference genome and will be discarded during the alignment step
+
+### II. RNA MAPPING with STAR:
+
+### (A). Mus musculus representative:
+Mus musculus genome version GRCm38 is downloaded from GEO-NCBI. It containds below files:
+
+cd Mus_musculus
+krishnam@Milou:~/Mus_musculus$ ls -h
+Mus_musculus.GRCm38.100.chr.gtf
+Mus_musculus.GRCm38.100.chr.gtf.gz
+Mus_musculus.GRCm38.dna_sm.toplevel.fa
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz.amb
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz.ann
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz.bwt
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz.pac
+Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz.sa
+
+### Tried to map our filtered reads to the Mus musculus reference genome we have these files. The files were decompressed and concatenated using “zcat” and then used to create index. 
+
+zcat Mus_musculus.GRCm38.100.chr.gtf.gz > Mus_musculus.GRCm38.100.chr.gtf
+zcat Mus_musculus.GRCm38.dna_sm.toplevel.fa.gz > Mus_musculus.GRCm38.dna_sm.toplevel.fa
+
+### First the annotated genome index was built of the reference genome using “STAR” tool. Code:
+
+STAR --runMode genomeGenerate --genomeDir indexes/ --genomeFastaFiles /home/krishnam/Mus_musculus/Mus_musculus.GRCm38.dna_sm.toplevel.fa --sjdbGTFfile 
+
+###After building index, they were used in mapping using “STAR”. But before performing mapping, I ran “fastq_pair” tool to make the lengths of all the 4  reads (forward and reverse) of both the samples equal.
+
+/home/krishnam/fastq-pair/build/fastq_pair SRR306394_1_filtered_trim_cutadapt.fastq SRR306394_2_filtered_trim_cutadapt.fastq
+/home/krishnam/fastq-pair/build/fastq_pair SRR306395.3_1_filtered_trim_cutadapt.fastq SRR306395.3_2_filtered_trim_cutadapt.fastq
+/home/krishnam/fastq-pair/build/fastq_pair SRR306396.3_1_filtered_trim_cutadapt.fastq SRR306396.3_2_filtered_trim_cutadapt.fastq
+/home/krishnam/fastq-pair/build/fastq_pair SRR306397_1_filtered_trim_cutadapt.fastq SRR306397_2_filtered_trim_cutadapt.fastq
+/home/krishnam/fastq-pair/build/fastq_pair SRR306398_1_filtered_trim_cutadapt.fastq SRR306398_2_filtered_trim_cutadapt.fastq
+/home/krishnam/fastq-pair/build/fastq_pair SRR306399_1_filtered_trim_cutadapt.fastq SRR306399_2_filtered_trim_cutadapt.fastq
+
+## no need to run on brain samples as both the forward and reverse reads are in the single file
+
+
+### This above code produced 2 fastq files(one for paired and one for single reads) which I used to perform mapping. Code for mapping:
+
+### below code used for liver and kidney samples which were processed with fastq_pair
+
+STAR --genomeDir /home/krishnam/indexes/ --readFilesIn /home/krishnam/H_glaber_quality_filtering/SRR306395.3_1_filtered_trim_cutadapt.fastq.paired.fq /home/krishnam/H_glaber_quality_filtering/SRR306395.3_2_filtered_trim_cutadapt.fastq.paired.fq --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --outFileNamePrefix /home/krishnam/H_glaber_quality_filtering/alignments/SRR306395.3
+
+### code for brain sample which were not processed using fastq_pair:
+
+STAR --genomeDir /home/krishnam/indexes/ --readFilesIn SRR306400_trim.fastq --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --outFileNamePrefix /home/krishnam/H_glaber_quality_filtering/alignments_H_glaber/SRR306400
+
+### likewise performed above step on all the reads
+
+
+### (B). H. glaber representative:
+
+### To build an index for H_glaber female annotation file:
+
+STAR --runMode genomeGenerate --genomeDir /home/krishnam/indexes_H_glaber/ --genomeFastaFiles GCF_000247695.1_HetGla_female_1.0_genomic.fna --sjdbGTFfile GCF_000247695.1_HetGla_female_1.0_genomic.gtf --sjdbOverhang 80 --outFileNamePrefix genome
+
+### After building index, codes used for mapping are:
+## for liver and kidney samples which are processed with fastq_pair:
+
+STAR --genomeDir /home/krishnam/indexes_H_glaber/ --readFilesIn SRR306394_1_filtered_trim_cutadapt.fastq.paired.fq SRR306394_2_trim.fastq.paired.fq --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --outFileNamePrefix /home/krishnam/H_glaber_quality_filtering/alignments_H_glaber/SRR306394
+
+## for brain samples (without processing through fastq_pair tool):
+STAR --genomeDir /home/krishnam/indexes_H_glaber/ --readFilesIn SRR306400_filtered_trim_cutadapt.fastq --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --outFileNamePrefix /home/krishnam/H_glaber_quality_filtering/alignments_H_glaber/SRR306400
+
+####################### 
+### After mapping, it necessary to check its quality which is done here using "Qualimap"
+/home/andrew/Programs/qualimap_v2.2.1/qualimap rnaseq -pe -bam SRR306394Aligned.sortedByCoord.out.bam -gtf /home/krishnam/H_glaber_quality_filtering/Mus_musculus.GRCm38.100.chr.gtf -outdir QualiMap -p strand-specific-reverse --java-mem-size=64G
+
+##above code was used on all the outputs of STAR mapping step.
+
+### To access results, the Qualimap output folder was compressed:
+
+tar -zcvf QualiMap_94.tar.gz QualiMap94/
+tar -zcvf QualiMap_96.tar.gz QualiMap96/
+tar -zcvf QualiMap_97.tar.gz QualiMap97/
+tar -zcvf QualiMap_98.tar.gz QualiMap98/
+tar -zcvf QualiMap_99.tar.gz QualiMap99/
+tar -zcvf QualiMap_400.tar.gz QualiMap400/
+tar -zcvf QualiMap_401.tar.gz QualiMap401/
+tar -zcvf QualiMap_402.tar.gz QualiMap402/
+
+
+###The above code produces files named QualiMap94/95/96/97/98/99/400/401/402 which contain images, graphs and charts which were examined
+
+
+##############################################################################################################################################
+### III. Reads count using FEATURE COUNTS:
+
+### Once we have our reads aligned to the genome, the next step is to count how many reads have mapped to each gene. We will be using the featureCounts tool to get the gene counts. We picked this tool because it is accurate, fast and is relatively easy to use. It counts reads that map to a single location (uniquely mapping).
+
+### Code to run feature count on the input bamfiles (produced after running STAR-mapping) and gtf file of Mus musculus and H. glaber for annotation
+
+## for Mus musculus as a reference:
+
+featureCounts -T 4 -s2 -a /home/krishnam/Mus_musculus/Mus_musculus.GRCm38.100.chr.gtf -o /home/ krishnam/feature_counts/featurecounts_output_9samples/countmatrix.txt SRR306394Aligned.sortedByCoord.out.bam SRR306395.3Aligned.sortedByCoord.out.bam SRR306396.3Aligned.sortedByCoord.out.bam SRR306397Aligned.sortedByCoord.out.bam SRR306398Aligned.sortedByCoord.out.bam SRR306399Aligned.sortedByCoord.out.bam SRR306400Aligned.sortedByCoord.out.bam SRR306401Aligned.sortedByCoord.out.bam SRR306402Aligned.sortedByCoord.out.bam
+
+
+## for H. glaber as a reference:
+
+featureCounts -T 4 -s2 -a home/krishnam//H_glaber_genome/GCF_000247695.1_HetGla_female_1.0_genomic.gtf -o /home/krishnam/feature_counts/fc_output_H_glaber/countmatrix.txt SRR306394Aligned.sortedByCoord.out.bam SRR306395.3Aligned.sortedByCoord.out.bam SRR306396.3Aligned.sortedByCoord.out.bam SRR306397Aligned.sortedByCoord.out.bam SRR306398Aligned.sortedByCoord.out.bam SRR306399Aligned.sortedByCoord.out.bam SRR306400Aligned.sortedByCoord.out.bam SRR306401Aligned.sortedByCoord.out.bam SRR306402Aligned.sortedByCoord.out.bam
+
+## Next step is to clean up the featureCounts matrix
+## need to get rid of unwanted columns from the matrix produced by feature_count step.
+### We are only keeping gene id and gene counts in samples 94,95,96,97,98,99,400,401, and 402. I am going to cut f1,7,8,9,10,11,12,13,14,15 columns and saving the result as Rmatrix.txt
+
+cut -f1,7,8,9,10,11,12,13,14,15 countmatrix.txt > countmatrix.Rmatrix.txt
+
+### Then filtered the header line by keeping just sample names for eg. SRR306394, SRR306395, SRR306396,... and so on using VIM editor 
+
+# After running above code, we will enter editor text  typing 
+vim countmatrix.Rmaytrix.txt
+
+## and within it i wrote:
+
+gg (to get cursor at the start)
+dd ( to remove first line)
+
+#I used INSERT command to modify the header line.
+#Then to remove file name followed after sample name:
+:%s/Aligned.sortedByCoord.out.bam//g
+
+#Now to remove the pathway to the sample name:
+:s%/\/home\/krishnam\/feature_counts\/STAR\/bams_sample_1\///g
+:s%/\/home\/krishnam\/feature_counts\/STAR\/bams_sample_2\///g
+
+# NOTE:I have a \ preceding each /, which tells vim that we are not using the / as part of our search
+# nOTE: editing can also be done using delete button on keyboard after using gg and dd command in vim editor
+
+
+### after creating Rmatrix which contains gene counts we gonna use this matrix for our next step of Differentially expressed gene.
+
+
